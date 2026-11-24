@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Calculate production costs and margins for a Dacha Craft order.">
+  <title>Quote calculator | Dacha Craft</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="header-inner"><span class="mark" aria-hidden="true">DC</span><strong>Dacha Craft</strong><span class="section-label">Quote calculator</span></div>
+  </header>
+  <main>
+    <nav class="workspace-nav" aria-label="Workspace">
+      <button type="button" data-view="quote-view" aria-pressed="true">Quote</button>
+      <button type="button" data-view="library-view" aria-pressed="false">Material library</button>
+      <button type="button" data-view="saved-view" aria-pressed="false">Saved work</button>
+      <button type="button" data-view="plan-view" aria-pressed="false">Monthly plan</button>
+    </nav>
+    <p id="workspace-status" role="status" hidden></p>
+    <div id="quote-view">
+    <div class="page-heading">
+      <div><h1>Quote calculator</h1><p>Price an order from your materials, shop time, and selling costs.</p></div>
+      <div class="actions"><button type="button" id="new-quote">New quote</button><button type="button" id="load-sample">Load sample quote</button></div>
+    </div>
+    <form id="quote-form" class="layout">
+      <div class="editor">
+        <section class="panel" aria-labelledby="order-heading">
+          <h2 id="order-heading">Order details</h2>
+          <div class="fields">
+            <label class="wide">Product<input id="product" value="Buttero luggage tag"></label>
+            <label>Order quantity<input id="quantity" type="number" min="1" step="1" value="13" required></label>
+            <label>Price per unit ($)<input id="price" type="number" min="0" step="0.01" value="18" required></label>
+            <label>Started per run<input id="started" type="number" min="1" step="1" value="12" required></label>
+            <label>Sellable per run<input id="sellable" type="number" min="1" step="1" value="10" required></label>
+            <label>Started in partial run<input id="partial" type="number" min="1" step="1" placeholder="Full run"></label>
+            <label>Channel<input id="channel" value="Direct"></label>
+            <label>Target margin (%)<input id="target" type="number" min="0" max="99.99" step="0.01" value="50" required></label>
+            <button type="button" id="solve-price">Solve for price</button>
+          </div>
+          <p class="hint" id="runs"></p>
+        </section>
+        <section class="panel" aria-labelledby="recipe-heading">
+          <div class="panel-heading"><h2 id="recipe-heading">Production recipe</h2><button type="button" id="add-row">+ Custom cost</button></div>
+          <div class="inline-controls">
+            <label>Library material<select id="pick-material"><option value="">Select a material</option></select></label>
+            <button type="button" id="add-material" disabled>Add to quote</button>
+            <button type="button" id="refresh-rates">Refresh library rates</button>
+          </div>
+          <p class="hint recipe-hint">Use matching units for quantity and rate. For hourly rates, enter 60 minutes as the rate quantity.</p>
+          <div id="recipe"></div>
+        </section>
+        <section class="panel" aria-labelledby="selling-heading">
+          <h2 id="selling-heading">Selling costs and adjustments</h2>
+          <div class="fields">
+            <label>Setup charge ($)<input id="setup" type="number" min="0" step="0.01" value="20" required></label>
+            <label>Order discount ($)<input id="discount" type="number" min="0" step="0.01" value="0" required></label>
+            <label>Seller-paid shipping ($)<input id="shipping" type="number" min="0" step="0.01" value="9" required></label>
+            <label>Percentage fee (%)<input id="fee" type="number" min="0" max="100" step="0.01" value="3" required></label>
+            <label>Fixed order fee ($)<input id="fixed" type="number" min="0" step="0.01" value="0.30" required></label>
+          </div>
+        </section>
+      </div>
+      <aside class="summary" aria-labelledby="summary-heading">
+        <div class="summary-top">
+          <h2 id="summary-heading">Quote summary</h2>
+          <p id="product-summary"></p>
+          <div class="total-label">Customer total</div>
+          <output id="total" class="total"></output>
+        </div>
+        <div class="summary-body">
+          <p id="error" role="status" hidden></p>
+          <dl>
+            <div><dt>Order revenue</dt><dd id="revenue"></dd></div>
+            <div><dt>Production</dt><dd id="production"></dd></div>
+            <div><dt>Seller-paid shipping</dt><dd id="shipping-total"></dd></div>
+            <div><dt>Selling fees</dt><dd id="fees"></dd></div>
+          </dl>
+          <dl class="profit">
+            <div><dt>Order profit</dt><dd id="profit"></dd></div>
+            <div><dt>Profit per unit</dt><dd id="unit-profit"></dd></div>
+            <div><dt>Actual margin</dt><dd id="margin"></dd></div>
+          </dl>
+          <p class="hint" id="target-status"></p>
+          <div class="actions">
+            <button type="button" id="save-quote">Save quote</button>
+            <button type="button" id="finalize-quote">Save final snapshot</button>
+            <button type="button" id="quote-csv">Export CSV</button>
+          </div>
+        </div>
+      </aside>
+    </form>
+    </div>
+    <section id="library-view" class="panel" hidden aria-labelledby="library-heading">
+      <h1 id="library-heading" tabindex="-1">Material library</h1>
+      <p class="hint">Track stock in the same unit you use in recipes. Quotes estimate usage without changing stock on hand.</p>
+      <details class="import-panel" id="material-import-panel">
+        <summary>Import materials</summary>
+        <p class="hint">Choose a Rocky Mountain Leather Supply or BuckleGuy order confirmation, a BuckleGuy invoice, or a material CSV or JSON file. Review the rows and choose whether to update matching materials.</p>
+        <div class="actions">
+          <label class="file-control">Order or material files<input id="material-import-files" type="file" accept=".pdf,.csv,.json" multiple></label>
+          <button type="button" id="material-import-template">Download CSV template</button>
+        </div>
+        <p class="hint" id="material-import-status" role="status" hidden></p>
+        <div id="material-import-list"></div>
+        <div class="actions" id="material-import-actions" hidden>
+          <button type="button" id="save-material-import">Save imported materials</button>
+          <button type="button" id="discard-material-import">Discard import drafts</button>
+        </div>
+        <p class="hint" id="material-import-save-status" role="status" hidden></p>
+      </details>
+      <form id="material-form">
+        <p id="material-import-edit" class="hint" hidden></p>
+        <div class="fields">
+          <label>Material name<input name="name" required maxlength="120"></label>
+          <label>Material type
+            <select name="type">
+              <option value="other">Other</option>
+              <option value="leather" data-unit="sq ft">Leather</option>
+              <option value="thread" data-unit="meters">Thread</option>
+              <option value="filament" data-unit="grams">Filament</option>
+              <option value="hardware" data-unit="pieces">Hardware</option>
+              <option value="sheet" data-unit="sheets">Sheet stock</option>
+              <option value="packaging" data-unit="pieces">Packaging</option>
+            </select>
+          </label>
+          <label>Unit<input name="unit" placeholder="pieces, grams, sq ft" required maxlength="30"></label>
+          <label id="material-weight-field" hidden>Leather weight (oz)<input name="weight" type="number" min="1" max="16" step="0.5" disabled></label>
+          <label>Purchase cost ($)<input name="cost" type="number" min="0" step="0.01" required></label>
+          <label><span id="purchase-quantity-label">Usable quantity purchased</span><input name="purchase" type="number" min="0.000001" step="0.000001" required></label>
+          <label id="leather-cut-field" hidden>Cut or size<input name="cut" placeholder="e.g. 1/4 hide" maxlength="60" disabled></label>
+          <label id="leather-range-field" hidden>Usable area format
+            <select name="purchaseFormat" disabled>
+              <option value="exact">Exact area</option>
+              <option value="range">Area range</option>
+              <option value="rangePlus">Area range with +</option>
+            </select>
+          </label>
+          <label id="purchase-upper-field" hidden>Range upper estimate<input name="purchaseUpper" type="number" min="0.000001" step="0.000001" disabled></label>
+          <label><span id="stock-quantity-label">Quantity on hand</span><input name="stock" type="number" min="0" step="0.000001" required></label>
+          <label id="leather-stock-format-field" hidden>Stock on hand format
+            <select name="stockFormat" disabled>
+              <option value="exact">Exact area</option>
+              <option value="range">Area range</option>
+              <option value="rangePlus">Area range with +</option>
+            </select>
+          </label>
+          <label id="stock-upper-field" hidden>Stock upper estimate<input name="stockUpper" type="number" min="0.000001" step="0.000001" disabled></label>
+          <label>Supplier link<input name="link" type="url" placeholder="https://"></label>
+          <label>Material photo<input name="photo" type="file" accept="image/jpeg,image/png,image/webp"></label>
+        </div>
+        <p class="hint" id="leather-range-hint" hidden>Quotes use the lower end of the range to calculate cost. Enter stock on hand separately.</p>
+        <div id="material-photo-preview" class="photo-preview" hidden>
+          <img id="material-photo" alt="Material photo preview">
+          <button type="button" id="remove-material-photo">Remove photo</button>
+        </div>
+        <div class="actions"><button id="material-submit">Add material</button><button type="button" id="cancel-material" hidden>Cancel edit</button></div>
+      </form>
+      <div id="materials"></div>
+    </section>
+    <section id="saved-view" class="panel" hidden aria-labelledby="saved-heading">
+      <h1 id="saved-heading">Saved work</h1>
+      <p class="hint">Data stays in this browser. Export a backup to keep a portable copy.</p>
+      <div class="actions"><button type="button" id="export-backup">Export JSON backup</button><label class="file-control">Import backup and merge<input id="import-backup" type="file" accept=".json,application/json"></label></div>
+      <h2>Quotes</h2>
+      <div id="saved-quotes"></div>
+      <h2>Monthly plans</h2>
+      <div id="saved-plans"></div>
+    </section>
+    <section id="plan-view" class="panel" hidden aria-labelledby="plan-heading">
+      <div class="panel-heading"><h1 id="plan-heading">Monthly plan</h1><button type="button" id="new-plan">New plan</button></div>
+      <p class="hint">Use saved quotes as order types. Order counts apply each quote’s own quantity, channel fees, and setup.</p>
+      <form id="plan-form">
+        <div class="fields">
+          <label>Plan name<input id="plan-name" value="Monthly plan" required></label>
+          <label>Other overhead ($)<input id="overhead" type="number" min="0" step="0.01" value="0" required></label>
+          <label>Shared selling costs ($)<input id="marketing" type="number" min="0" step="0.01" value="0" required></label>
+          <label>Owner admin hours per month<input id="admin" type="number" min="0" step="any" value="0" required></label>
+          <label>Owner admin rate ($/hour)<input id="admin-rate" type="number" min="0" step="0.01" value="0" required></label>
+          <label>Savings (% of revenue)<input id="savings" type="number" min="0" max="100" step="0.01" value="0" required></label>
+          <label>Tax reserve (% of positive operating profit)<input id="reserve" type="number" min="0" max="100" step="0.01" value="0" required></label>
+        </div>
+        <div class="inline-controls"><label>Saved quote<select id="plan-quote"></select></label><button type="button" id="add-plan-order">Add order type</button></div>
+        <div id="plan-orders"></div>
+        <div class="actions"><button>Save plan</button><button type="button" id="plan-csv">Export CSV</button></div>
+      </form>
+      <div id="plan-result"></div>
+    </section>
+  </main>
+  <dialog id="delete-material-dialog" aria-labelledby="delete-material-heading" aria-describedby="delete-material-description">
+    <form method="dialog">
+      <h2 id="delete-material-heading">Delete material?</h2>
+      <p id="delete-material-description"></p>
+      <div class="actions">
+        <button value="cancel" autofocus>Cancel</button>
+        <button id="confirm-delete-material" value="delete">Delete material</button>
+      </div>
+    </form>
+  </dialog>
+  <template id="cost-row">
+    <fieldset class="cost-row">
+      <legend class="sr-only"></legend>
+      <div class="row-top">
+        <label>Cost name<input data-field="label"></label>
+        <label>Category<select data-field="category"><option value="material">Material</option><option value="machine">Machine time</option><option value="labor">Paid labor</option><option value="ownerLabor">Owner labor (unpaid)</option><option value="packaging">Packaging</option></select></label>
+        <button type="button" class="remove">Remove</button>
+      </div>
+      <div class="row-bottom">
+        <label>Charge per<select data-field="scope"><option value="order">Order</option><option value="batch">Run</option><option value="sellableUnit">Sellable unit</option><option value="startedUnit">Started unit</option></select></label>
+        <label>Quantity used<input data-field="usage" type="number" min="0" step="any" required></label>
+        <label>Rate cost ($)<input data-field="rateCost" type="number" min="0" step="0.01" required></label>
+        <label>Rate quantity<input data-field="rateUnits" type="number" min="0.000000001" step="any" required></label>
+        <div class="row-amount"><span>Line total</span><output></output></div>
+      </div>
+      <p class="hint material-source" hidden></p>
+    </fieldset>
+  </template>
+</body>
+</html>
